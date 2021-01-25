@@ -1,71 +1,110 @@
-from Functions import Function
-from tNetwork import Network
-import subprocess, rsa, pickle
+import subprocess, rsa, pickle, time, socket
 from _thread import *
 
-is_connected = False
-quitword = ""
-chatapp_cmd = ["connect"]
+def letterprint(text):
+	for i in range(0, len(text)):
+		if i < len(text) - 1:
+			print(text[i], end="", flush= True)
+			time.sleep(0.013)
+		else:
+			print(text[i], end="\n")
+			time.sleep(0.013)
+
+hostname = socket.gethostname()
+letterprint("terminal.py v1.5.0")
+letterprint("Welcome, " + str(hostname) + "!")
+# gets import list for commands (Imports.txt)
+try:
+	import_file = open('Imports.txt', 'rb')
+	imports_list = pickle.load(import_file)
+	import_file.close()
+	letterprint("Imports: " + str(imports_list))
+except:
+	letterprint("error reading imports")
+
+
+# stores the imports in the imports_dict dictionnary.
+imports_dict = {}
+for x in imports_list:
+	try:
+		imports_dict[x] = __import__(x)
+		letterprint("Imported: " + str(x))
+	except ImportError as e:
+		letterprint("error importing: " + str(x) + "\n" + str(e))
+		
+# change path (imports_dict).
+def chtool(args):
+	executed = False
+	# removes tool(s) and updates Imports.txt 
+	if args[1] == "rm":
+		executed = True
+		for x in args[2:]:
+			imports_list.remove(x)
+			letterprint("removed " + str(x) + " from tools")
+		import_file = open("Imports.txt", "wb")
+		pickle.dump(imports_list, import_file)
+		import_file.close()
+		
+	# adds tool(s) and updates Imports.txt
+	elif args[1] == "add" and not args[2] in imports_list:
+		executed = True
+		if len(args[2:]) > 1:
+			letterprint("Can only add one tool at a time.")
+		for x in args[2]:
+			imports_list.append(x)
+			letterprint("added " + str(x) + " to tools")
+		import_file = open("Imports.txt", "wb")
+		pickle.dump(imports_list, import_file)
+		import_file.close()
+		
+	# updates path
+	if executed == True:
+		imports_dict = {}
+		for x in imports_list:
+			try:
+				imports_dict[x] = __import__(x)
+				letterprint("Imported: " + str(x))
+			except ImportError as e:
+				letterprint("error importing: " + str(x) + "\n" + str(e))
+		return imports_dict
+	return imports_dict
+
+
 cmd = ""
-location = "home"
-
-
-def scan(PR_k, ):
-	global quitword
-	while True:
-		try:
-			msg = pickle.loads(rsa.decrypt(n.client.recv(2048), PR_k))
-			print(msg)
-		except:
-			break
-		
-def post(SP_k):
-	global is_connected
-	global quitword
-	username = input("enter username:")
-	quitword = input("enter quit word:")
-	n.client.sendall(rsa.encrypt(pickle.dumps(quitword), SP_k))
-	while True:
-		msg = input()
-		try:
-			n.client.sendall(rsa.encrypt(pickle.dumps(username + ":" + msg), SP_k))
-			if msg == quitword:
-				is_connected = False
-				print("disconnected.")
-				break
-		except:
-			print("an error ocurred sending a message.")
-			break
-		
-while cmd != "exit":
+while True:
+	
 	#  input and arguments
-	cmd = str(input(location + ">> "))
+	cmd = str(input(">> "))
 	args = cmd.split()
-	# clear command
+	# clear command (preset)
+	
 	if cmd == "clear":
 		subprocess.run("clear")
-	# cd command
-	elif len(args) > 0 and args[0] == "cd":
-		cd = Function.cd(args, location)
-		location = cd
-	# chatapp commands
-	elif location == "chatapp" and len(args) > 0 and args[0] in chatapp_cmd:
-		if args[0] == "connect":
-			if len(args) == 2:
-				n = Network()
-				is_connected = n.connect(args[1])
-				if is_connected == True:
-					(P_k, PR_k) = rsa.newkeys(1024)
-					n.client.send(pickle.dumps(P_k))
-					SP_k = pickle.loads(n.client.recv(2048))
-					
-					start_new_thread(scan, (PR_k, ))
-					post(SP_k)
-			else:
-				if len(args) < 2:
-					print("error: no IP specified.")
-				elif len(args) > 2:
-					print("error: unexpected argument.")
-					
+	
+	elif cmd == "path":
+		letterprint(str(imports_dict) + "\n" + str(imports_list))
+	# rmtool command (preset)
+	
+	elif len(args) > 0 and args[0] == "chtool":
+		try:
+			imports_dict = chtool(args)
+		except:
+			letterprint("error executing")
+			
+	# analysing command
+	
+	elif len(args) > 0 and args[0] in imports_dict:
+		try:
+			imports_dict[args[0]].run(args, cmd)
+		except:
+			letterprint("error executing")
+			
+	# unknown command
+	
 	elif len(args) > 0 and cmd != "exit":
-		print("error: unknown command.")
+		letterprint("error: unknown command: " + str(cmd))
+	
+	elif len(args) > 0 and cmd == "exit":
+		break
+	
+
